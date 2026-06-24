@@ -1,4 +1,4 @@
-# koreader-textolimiti
+# textolimiti.koplugin
 
 A [KOReader](https://github.com/koreader/koreader) plugin that fixes the reading-progress percentage so it tracks the **real text** of a book — not its front matter, endnotes, or bibliography.
 
