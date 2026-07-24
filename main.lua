@@ -90,6 +90,67 @@ local function input_is_active()
     return has_focused_input(stack[#stack].widget)
 end
 
+local function topmost_widget()
+    local stack = UIManager._window_stack
+    if not stack or #stack == 0 then return nil end
+    return stack[#stack].widget
+end
+
+------------------------------------------------------------------
+-- Modal guard for the N opener.
+--
+-- Same idea as Pluginaro.is_modal_active (lib/pluginaro.lua) but kept
+-- local: textolimiti does not vendor/depend on pluginaro. Walks the
+-- top-of-stack widget's __index metatable chain looking for one of
+-- KOReader's blocking-dialog base classes, so N stands down while a
+-- ConfirmBox/InfoMessage/Menu/etc. already owns the keyboard instead
+-- of popping our dialog on top of it.
+------------------------------------------------------------------
+
+local MODAL_CLASS_MODULES = {
+    "ui/widget/menu",
+    "ui/widget/touchmenu",
+    "ui/widget/inputdialog",
+    "ui/widget/buttondialog",
+    "ui/widget/confirmbox",
+    "ui/widget/multiconfirmbox",
+    "ui/widget/infomessage",
+}
+
+local modal_classes
+local function get_modal_classes()
+    if modal_classes then return modal_classes end
+    modal_classes = {}
+    for _, mod in ipairs(MODAL_CLASS_MODULES) do
+        local ok, cls = pcall(require, mod)
+        if ok and type(cls) == "table" then
+            modal_classes[cls] = true
+        end
+    end
+    return modal_classes
+end
+
+local function is_modal_widget(widget)
+    if type(widget) ~= "table" then return false end
+    local classes = get_modal_classes()
+    if next(classes) == nil then return false end
+    local mt = getmetatable(widget)
+    local seen = {}
+    while type(mt) == "table" do
+        local cls = mt.__index
+        if type(cls) ~= "table" then break end
+        if classes[cls] then return true end
+        if seen[cls] then break end
+        seen[cls] = true
+        mt = getmetatable(cls)
+    end
+    return false
+end
+
+local function is_modal_active()
+    return is_modal_widget(topmost_widget())
+end
+
 ------------------------------------------------------------------
 -- Init
 ------------------------------------------------------------------
@@ -369,7 +430,7 @@ end
 
 function Textolimiti:_paintAllBoundaryTriangles(menu, bb)
     if not menu or not menu.item_group then
-        logger.info("textolimiti: paintAll — no menu or item_group")
+        logger.dbg("textolimiti: paintAll — no menu or item_group")
         return
     end
     local n_total, n_marked, n_paint = 0, 0, 0
@@ -385,7 +446,7 @@ function Textolimiti:_paintAllBoundaryTriangles(menu, bb)
             self:_paintBoundaryTriangle(bb, child)
         end
     end
-    logger.info(string.format(
+    logger.dbg(string.format(
         "textolimiti: paintAll total=%d marked=%d painted=%d show_start=%s show_end=%s",
         n_total, n_marked, n_paint,
         tostring(self._tl_show_start_triangle),
@@ -1060,6 +1121,7 @@ end
 
 function Textolimiti:onShowIdo()
     if input_is_active() then return false end
+    if is_modal_active() then return false end
     self:_showMainDialog()
     return true
 end
@@ -1217,6 +1279,9 @@ end
 -- Treat the chapter as "first body chapter".
 function Textolimiti:_markAsStart(entry)
     if not entry then return end
+    if not self:_handmade() then
+        return self:_warnNoHandmade()
+    end
     self:_applyStartAtSection(entry)
 end
 
@@ -1224,6 +1289,9 @@ end
 -- TOC entry. nil next_entry means body extends to the end of the book.
 function Textolimiti:_markAsEnd(entry)
     if not entry then return end
+    if not self:_handmade() then
+        return self:_warnNoHandmade()
+    end
     local toc = self.ui and self.ui.toc
     if not toc or not toc.toc then return end
     local picked_idx
@@ -1234,8 +1302,24 @@ function Textolimiti:_markAsEnd(entry)
     self:_applyEndBeforeSection(next_entry)
 end
 
+-- ";" / ":" are only meaningful while the TOC menu itself is the
+-- topmost window — that is the state _focusedTocEntry() reads from.
+-- If something is stacked ON TOP of the TOC menu (our own long-press
+-- ButtonDialog, a ConfirmBox, …), _focusedTocEntry() would still
+-- happily return the row that was focused before that dialog opened,
+-- silently bypassing it. Requiring the TOC menu to be exactly the
+-- topmost widget closes that gap without blocking the normal case
+-- (TOC menu itself is a modal Menu, so a blanket is_modal_active()
+-- check would reject the very state these keys are meant to work in).
+function Textolimiti:_tocMenuIsTopmost()
+    local toc = self.ui and self.ui.toc
+    local m = toc and toc.toc_menu
+    return m ~= nil and topmost_widget() == m
+end
+
 function Textolimiti:onMarkStartFromToc()
     if input_is_active() then return false end
+    if not self:_tocMenuIsTopmost() then return false end
     local entry = self:_focusedTocEntry()
     if not entry then return false end
     self:_markAsStart(entry)
@@ -1244,6 +1328,7 @@ end
 
 function Textolimiti:onMarkEndFromToc()
     if input_is_active() then return false end
+    if not self:_tocMenuIsTopmost() then return false end
     local entry = self:_focusedTocEntry()
     if not entry then return false end
     self:_markAsEnd(entry)

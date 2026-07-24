@@ -31,7 +31,7 @@ Press **N** while reading. A dialog appears:
 
 Marks are stored per book in the `.sdr` sidecar as KOReader [custom hidden flows](https://github.com/koreader/koreader/pull/10982), so they survive font/margin changes, reflows, and KOReader restarts.
 
-You can also set boundaries from the **Table of Contents**: long-press a TOC entry to mark it as start or end. The TOC then shows a `[komenco]` / `[fino]` label next to the marked entry and a thick boundary line beneath it.
+You can also set boundaries from the **Table of Contents**: focus a row and press `;` to mark it as the first body chapter, or `:` to mark it as the last body chapter — or long-press a TOC entry to pick either action from a dialog. The TOC then draws a thick black boundary line under the marked entry (one line below the last front-matter chapter, one line below the last body chapter), dividing the list into front matter / body / back matter at a glance. While only one boundary is set, a small triangle (▼ for start, ▲ for end) marks which one it is; once both are set, the three-block layout speaks for itself and the triangle is dropped.
 
 ## How it works
 
