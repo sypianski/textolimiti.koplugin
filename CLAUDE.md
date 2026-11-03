@@ -74,6 +74,23 @@ The plugin hooks several KOReader objects at runtime because there are no upstre
   row overpainting it). Each hook is idempotent, guarded by a `_ido_*_hooked` flag, because the
   widgets are rebuilt on every render.
 
+## Coordination with the plugin family
+
+textolimiti does **not** take part in `pluginaro` and has no overlay of its own, so there is nothing to
+register or provide. Sibling repos: `keyreader` (with `visel`), `kopad` (gamepad), `marjenoti`, `kotheme`,
+`frontespico`; each is its own GitHub repo with the same rules in its own `CLAUDE.md`.
+
+- **Do not add `GamepadButtonDown` / `GamepadAxisMotion` handlers here.** kopad is the only plugin that
+  consumes the pad globally; a second consumer would act on the same press. The TOC menu and the main
+  dialog count as ordinary windows for kopad (stock keys). If a pad control is really needed, add an
+  optional public method here and let kopad call it through `pluginaro` — the pad-side rules and a
+  checklist are in kopad's `CLAUDE.md`.
+- Keep the `_ido_*` / `_tl_*` field prefixes: they keep the monkey-patches here clear of fields the other
+  family plugins set on the same KOReader objects.
+- Working copies: develop in `~/utensili/koreader/textolimiti`;
+  `~/modi/koreader/koplugins/textolimiti.koplugin` is a submodule checkout of the same repo used for
+  deployment — pull there after pushing, do not commit there.
+
 ## Conventions
 
 - Private methods/fields are `_camelCase` / `_snake_case` with a leading underscore; internal state
